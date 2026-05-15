@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Book Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.2/color-thief.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f0f5;--panel:#fff;--border:#e0e0e0;
+  --accent:#5b5ef4;--accent-h:#4a4de0;
+  --text:#1a1a2e;--muted:#8e8ea0;--r:10px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;user-select:none}
+
+/* ── HEADER ── */
+header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 14px;height:50px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:100;gap:10px}
+.logo{font-size:15px;font-weight:700;letter-spacing:-.5px;white-space:nowrap}.logo span{color:var(--accent)}
+.mode-toggle{display:flex;background:var(--bg);border-radius:8px;padding:3px;gap:2px;flex-shrink:0}
+.mode-btn{padding:5px 13px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);transition:all .15s;white-space:nowrap}
+.mode-btn.active{background:var(--panel);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.hdr-actions{display:flex;gap:5px;flex-shrink:0}
+
+/* ── LAYOUT ── */
+.app-body{display:flex;flex:1;overflow:hidden}
+
+/* ── PANELS ── */
+.left-panel,.right-panel{width:218px;background:var(--panel);overflow-y:auto;flex-shrink:0;padding:12px;display:flex;flex-direction:column;gap:12px}
+.left-panel{border-right:1px solid var(--border)}.right-panel{border-left:1px solid var(--border)}
+.sec{display:flex;flex-direction:column;gap:6px}
+.sec-title{font-size:10px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);padding-bottom:3px;border-bottom:1px solid var(--border)}
+
+/* ── SIZE SYSTEM ── */
+.size-tabs{display:flex;gap:3px}
+.size-tab{flex:1;padding:5px 4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer;font-size:11px;font-weight:500;text-align:center;transition:all .15s;color:var(--muted)}
+.size-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.size-info{font-size:10px;color:var(--muted);text-align:center;padding:3px;background:var(--bg);border-radius:5px}
+.custom-inputs{display:flex;gap:6px;align-items:center}
+.custom-inputs input{flex:1;border:1px solid var(--border);border-radius:6px;padding:5px 7px;font-size:12px;background:var(--bg);color:var(--text);outline:none}
+.custom-inputs input:focus{border-color:var(--accent)}
+.custom-inputs span{font-size:11px;color:var(--muted);white-space:nowrap}
+
+/* ── UPLOAD ── */
+.upload-area{border:2px dashed var(--border);border-radius:var(--r);padding:8px;text-align:center;cursor:pointer;transition:all .2s;position:relative;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:58px}
+.upload-area:hover{border-color:var(--accent);background:#f0f0ff}
+.upload-area.has-image{border-style:solid;border-color:var(--accent)}
+.upload-area img{width:100%;height:44px;object-fit:cover;border-radius:5px;margin-bottom:2px}
+.upload-area span{font-size:10px;color:var(--muted)}.upload-area .ulbl{font-size:10px;font-weight:600;color:var(--text)}
+.upload-area input[type=file]{display:none}
+.clr-btn{position:absolute;top:3px;right:3px;width:15px;height:15px;border-radius:50%;background:#ff4757;color:#fff;border:none;cursor:pointer;font-size:8px;display:none;align-items:center;justify-content:center}
+
+/* ── PAGES ── */
+.pages-drop{border:2px dashed var(--border);border-radius:var(--r);padding:10px;text-align:center;cursor:pointer;background:var(--bg);transition:all .2s;font-size:11px;color:var(--muted);line-height:1.6}
+.pages-drop:hover{border-color:var(--accent);background:#f0f0ff}
+.pages-drop input{display:none}
+.pages-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:5px}
+.pg-thumb{aspect-ratio:3/4;border-radius:4px;overflow:hidden;position:relative;background:#ddd;cursor:pointer}
+.pg-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.pg-num{position:absolute;bottom:2px;right:2px;background:rgba(0,0,0,.5);color:#fff;font-size:7px;padding:1px 3px;border-radius:2px}
+.pg-del{position:absolute;top:1px;right:1px;width:13px;height:13px;background:#ff4757cc;color:#fff;border:none;border-radius:3px;font-size:7px;cursor:pointer;display:none;align-items:center;justify-content:center}
+.pg-thumb:hover .pg-del{display:flex}
+
+/* ── CONTROLS ── */
+.ctrl{display:flex;align-items:center;gap:6px}
+.ctrl label{font-size:10px;color:var(--muted);min-width:46px}
+.ctrl input[type=range]{flex:1;accent-color:var(--accent)}
+.ctrl input[type=color]{width:26px;height:24px;border:1px solid var(--border);border-radius:5px;cursor:pointer;padding:2px;background:none}
+.ctrl .v{font-size:9px;color:var(--muted);min-width:28px;text-align:right}
+.tog-g{display:flex;gap:3px}.tog-btn{flex:1;padding:5px;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer;font-size:10px;text-align:center;transition:all .15s}
+.tog-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* ── BUTTONS ── */
+.btn{padding:7px 12px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:500;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:4px}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-h)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:4px 10px;font-size:11px}
+
+.hint-box{background:#f0f0ff;border:1px solid #d0d0ff;border-radius:7px;padding:7px 9px;font-size:10px;color:#5558a0;line-height:1.6}
+.hint-box b{color:var(--accent)}
+
+/* ── CENTER ── */
+.center-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.canvas-stage{width:100%;height:100%;display:flex;align-items:center;justify-content:center;transition:background .3s;position:relative;overflow:hidden}
+.book-scene{perspective:1400px}
+.book-wrap{transform-style:preserve-3d;position:relative;cursor:grab}
+.book-wrap:active{cursor:grabbing}
+.book-face{position:absolute;overflow:hidden;backface-visibility:hidden}
+.book-face img{width:100%;height:100%;object-fit:cover;display:block}
+.ph-icon{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:rgba(0,0,0,.22);font-size:10px;gap:4px;background:rgba(255,255,255,.08);cursor:pointer}
+.pages-grid-face{width:100%;height:100%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr;gap:2px;padding:4px;background:#f8f4ee}
+.pg-cell{border-radius:2px;overflow:hidden;background:#e8e4de}.pg-cell img{width:100%;height:100%;object-fit:cover;display:block}
+.rot-hint{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.4);color:#fff;font-size:10px;padding:5px 13px;border-radius:18px;pointer-events:none;opacity:1;transition:opacity 1s}
+.rot-hint.fade{opacity:0}
+
+/* ── PREVIEW ── */
+.preview-stage{display:none;width:100%;height:100%;overflow-y:auto;position:relative}
+.preview-stage.active{display:block}
+.preview-inner{min-height:100%;padding:36px 40px;display:flex;flex-direction:column;gap:28px;align-items:center}
+
+/* Book info */
+.book-info-bar{width:100%;max-width:820px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px 18px;background:rgba(255,255,255,.7);backdrop-filter:blur(8px);border-radius:12px;border:1px solid rgba(255,255,255,.6);box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.info-field{display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px}
+.info-field label{font-size:9px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+.info-field input{border:none;border-bottom:1px solid var(--border);background:transparent;font-size:13px;color:var(--text);padding:3px 0;outline:none;font-family:inherit;width:100%}
+.info-field input:focus{border-color:var(--accent)}
+.info-field input::placeholder{color:#bbb}
+
+/* Flat book display */
+.flat-book-wrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+.flat-book{display:flex;align-items:stretch;box-shadow:0 12px 40px rgba(0,0,0,.18);position:relative}
+.flat-cover{overflow:hidden;flex-shrink:0;position:relative}
+.flat-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.flat-cover.empty{display:flex;align-items:center;justify-content:center;font-size:11px;color:rgba(0,0,0,.3)}
+.flat-spine{overflow:hidden;flex-shrink:0;position:relative}
+.flat-spine img{width:100%;height:100%;object-fit:cover;display:block}
+.flat-spine.empty{display:flex;align-items:center;justify-content:center}
+.flat-dims{font-size:11px;color:rgba(0,0,0,.35);text-align:center;margin-top:4px}
+
+/* Preview color swatches */
+.preview-swatches{width:100%;max-width:820px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pv-swatch{width:36px;height:36px;border-radius:7px;cursor:pointer;border:1px solid rgba(0,0,0,.07);transition:transform .15s;position:relative;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;flex-shrink:0}
+.pv-swatch:hover{transform:scale(1.12)}
+.pv-swatch .hex{background:rgba(0,0,0,.5);color:#fff;font-size:7px;padding:2px;width:100%;text-align:center;font-family:monospace}
+.pv-swatch-label{font-size:10px;color:rgba(0,0,0,.4);padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.6);white-space:nowrap}
+
+/* Inner pages preview */
+.pages-section{width:100%;max-width:820px;display:flex;flex-direction:column;gap:12px}
+.pages-sec-title{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:rgba(0,0,0,.4)}
+.spreads-wrap{display:flex;flex-direction:column;gap:20px}
+.spread-row{display:flex;gap:0;box-shadow:0 6px 24px rgba(0,0,0,.12);border-radius:8px;overflow:hidden}
+.spread-page{flex:1;overflow:hidden;background:#f5f0e8;position:relative}
+.spread-page img{width:100%;height:100%;object-fit:cover;display:block}
+.spread-page.empty{display:flex;align-items:center;justify-content:center;color:#ccc;font-size:11px}
+.spread-gutter{width:3px;background:linear-gradient(to right,#a0988a,#c8c0b0);flex-shrink:0}
+.spread-lbls{display:flex;justify-content:space-between;font-size:9px;color:rgba(0,0,0,.3);padding:4px 2px}
+
+/* ── RIGHT PANEL ── */
+.color-grp{display:flex;flex-direction:column;gap:4px}.color-grp-title{font-size:9px;color:var(--muted);font-weight:500}
+.swatch-row{display:flex;gap:4px;flex-wrap:wrap}
+.swatch{width:36px;height:36px;border-radius:6px;cursor:pointer;border:1px solid rgba(0,0,0,.07);flex-shrink:0;transition:transform .15s;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+.swatch:hover{transform:scale(1.1)}
+.swatch .hex-l{background:rgba(0,0,0,.5);color:#fff;font-size:7px;padding:2px;width:100%;text-align:center;font-family:monospace}
+.color-ph{padding:10px;border-radius:7px;background:var(--bg);text-align:center;font-size:10px;color:var(--muted);border:1px dashed var(--border)}
+.shelf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.shelf-item{aspect-ratio:2/3;border-radius:5px;overflow:hidden;cursor:pointer;border:2px solid transparent;transition:all .15s;position:relative;background:var(--bg)}
+.shelf-item:hover{border-color:var(--accent)}
+.shelf-item img{width:100%;height:100%;object-fit:cover;display:block}
+.shelf-del{position:absolute;top:2px;right:2px;background:#ff4757cc;border:none;color:#fff;border-radius:3px;width:15px;height:15px;cursor:pointer;font-size:8px;display:none;align-items:center;justify-content:center}
+.shelf-item:hover .shelf-del{display:flex}
+.shelf-empty{grid-column:1/-1;text-align:center;padding:14px;color:var(--muted);font-size:10px}
+
+/* ── FABRIC MODAL ── */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;display:none;align-items:center;justify-content:center}
+.modal-ov.open{display:flex}
+.modal{background:var(--panel);border-radius:13px;width:700px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-hdr{padding:13px 17px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-hdr h3{font-size:13px;font-weight:600}
+.modal-cls{width:25px;height:25px;border:none;background:var(--bg);border-radius:5px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center}
+.modal-body{flex:1;overflow:hidden;background:#222}
+.modal-ftr{padding:9px 17px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:7px}
+.modal-hint{font-size:10px;color:var(--muted)}
+.pdf-prog{display:none;padding:12px;flex-direction:column;gap:6px;align-items:center;font-size:11px;color:var(--muted)}
+.pdf-prog.vis{display:flex}
+progress{width:100%;accent-color:var(--accent)}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(70px);background:#1a1a2e;color:#fff;padding:8px 16px;border-radius:7px;font-size:12px;z-index:9999;transition:transform .3s;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">3D Book <span>Studio</span></div>
+  <div class="mode-toggle">
+    <button class="mode-btn active" id="modeEdit" onclick="setMode('edit')">✏️ 編輯</button>
+    <button class="mode-btn" id="modePreview" onclick="setMode('preview')">👁 預覽</button>
+  </div>
+  <div class="hdr-actions">
+    <button class="btn btn-outline btn-sm" onclick="saveToShelf()">💾 儲存</button>
+
+  </div>
+</header>
+
+<div class="app-body">
+
+<!-- ── LEFT PANEL ── -->
+<div class="left-panel">
+
+  <!-- Size System -->
+  <div class="sec">
+    <div class="sec-title">書本尺寸</div>
+    <div class="size-tabs">
+      <button class="size-tab active" id="sizeA5" onclick="setSize('A5')">A5</button>
+      <button class="size-tab" id="sizeB5" onclick="setSize('B5')">B5</button>
+      <button class="size-tab" id="sizeCust" onclick="setSize('custom')">自訂</button>
+    </div>
+    <div class="size-info" id="sizeInfo">148 × 210 mm · 比例 1:1.414</div>
+    <div class="custom-inputs" id="customInputs" style="display:none">
+      <input type="number" id="custW" value="148" min="50" max="500" oninput="updateCustomSize()">
+      <span>×</span>
+      <input type="number" id="custH" value="210" min="70" max="700" oninput="updateCustomSize()">
+      <span>mm</span>
+    </div>
+  </div>
+
+  <!-- Cover / Spine / Back Cover -->
+  <div class="sec">
+    <div class="sec-title">封面 / 書脊 / 封底</div>
+    <label class="upload-area" id="coverArea">
+      <input type="file" accept="image/*" onchange="handleUpload(event,'cover')">
+      <span class="ulbl">封面</span><span>點擊上傳</span>
+      <button class="clr-btn" onclick="clearImg(event,'cover')">✕</button>
+    </label>
+    <label class="upload-area" id="spineArea">
+      <input type="file" accept="image/*" onchange="handleUpload(event,'spine')">
+      <span class="ulbl">書脊</span><span>點擊上傳</span>
+      <button class="clr-btn" onclick="clearImg(event,'spine')">✕</button>
+    </label>
+    <label class="upload-area" id="backArea">
+      <input type="file" accept="image/*" onchange="handleUpload(event,'back')">
+      <span class="ulbl">封底</span><span>點擊上傳</span>
+      <button class="clr-btn" onclick="clearImg(event,'back')">✕</button>
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);cursor:pointer">
+      <input type="checkbox" id="backUseCover" style="accent-color:var(--accent)" onchange="buildBook()">
+      封底沿用封面圖
+    </label>
+  </div>
+
+  <!-- Inner Pages -->
+  <div class="sec">
+    <div class="sec-title">內頁（最多6頁）</div>
+    <div class="pages-drop" onclick="document.getElementById('pagesInput').click()">
+      <input type="file" id="pagesInput" accept="image/*,application/pdf" multiple onchange="handlePages(event)">
+      📄 圖片（多選）或 PDF
+    </div>
+    <div class="pdf-prog" id="pdfProg"><div>轉換中...</div><progress id="pdfBar" max="6" value="0"></progress></div>
+    <div class="pages-grid" id="pagesThumbs"></div>
+    <div id="pagesCount" style="font-size:10px;color:var(--muted);text-align:center"></div>
+  </div>
+
+  <!-- Flip -->
+  <div class="sec">
+    <div class="sec-title">翻書方向</div>
+    <div class="tog-g">
+      <button class="tog-btn active" id="flipL" onclick="setFlip('left')">← 左翻</button>
+      <button class="tog-btn" id="flipR" onclick="setFlip('right')">右翻 →</button>
+    </div>
+  </div>
+
+  <!-- Spine Width -->
+  <div class="sec">
+    <div class="sec-title">書脊寬度</div>
+    <div class="custom-inputs">
+      <input type="number" id="spineInput" value="1.0" min="0.3" max="5" step="0.1" oninput="updateSpineCm(this.value)" style="flex:1">
+      <span>cm</span>
+    </div>
+  </div>
+
+  <!-- Background -->
+  <div class="sec">
+    <div class="sec-title">背景顏色</div>
+    <div class="ctrl"><label>背景</label><input type="color" id="bgPicker" value="#e8e8f0" oninput="updateBg(this.value)"><span class="v" id="bgV">#e8e8f0</span></div>
+  </div>
+
+  <div class="hint-box"><b>右鍵拖曳</b>旋轉書本<br><b>左鍵拖曳</b>移動位置<br><b>滾輪</b>縮放書本</div>
+  <button class="btn btn-outline" style="width:100%;font-size:11px" onclick="resetTransform()">⟳ 重置視角</button>
+</div>
+
+<!-- ── CENTER ── -->
+<div class="center-area">
+  <!-- Edit Stage -->
+  <div class="canvas-stage" id="canvasStage" style="background:#e8e8f0">
+    <div class="book-scene" id="bookScene" style="transform-style:preserve-3d">
+      <div class="book-wrap" id="bookWrap"></div>
+    </div>
+    <div class="rot-hint" id="rotHint">右鍵拖曳可旋轉書本</div>
+  </div>
+  <!-- Preview Stage -->
+  <div class="preview-stage" id="previewStage">
+    <div class="preview-inner" id="previewInner"></div>
+  </div>
+</div>
+
+<!-- ── RIGHT PANEL ── -->
+<div class="right-panel">
+  <div class="sec">
+    <div class="sec-title">色票</div>
+    <div id="swatchBox"><div class="color-ph">上傳封面後<br>自動顯示色票</div></div>
+  </div>
+  <div class="sec">
+    <div class="sec-title">書櫃</div>
+    <div class="shelf-grid" id="shelfGrid"><div class="shelf-empty">尚無儲存書本</div></div>
+  </div>
+</div>
+</div>
+
+<!-- Fabric Modal -->
+<div class="modal-ov" id="editModal">
+  <div class="modal">
+    <div class="modal-hdr"><h3 id="modalTitle">編輯圖片</h3><button class="modal-cls" onclick="closeModal()">✕</button></div>
+    <div class="modal-body" id="modalBody"><canvas id="fabricCanvas"></canvas></div>
+    <div class="modal-ftr">
+      <span class="modal-hint">拖曳移動 · 角落縮放</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-outline btn-sm" onclick="resetFabric()">重置</button>
+        <button class="btn btn-primary btn-sm" onclick="applyFabric()">套用</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── PDF.js worker ──
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── PHYSICAL SIZES (mm) ──
+const SIZES = {
+  A5:     { w:148, h:210 },
+  B5:     { w:176, h:250 },
+  custom: { w:148, h:210 }
+};
+
+// ── STATE ──
+const S = {
+  images: { cover:null, spine:null, back:null },
+  pages: [],
+  flip: 'left',
+  spineW: 38,      // display px (≈1.0 cm)
+  size: 'A5',
+  customW: 148,
+  customH: 210,
+  bg: '#e8e8f0',
+  mode: 'edit',
+  // 3D transform
+  rotY: -25, rotX: 5, zoom: 1, offX: 0, offY: 0,
+  // Book info
+  title: '', author: '', pubDate: '',
+  // Extracted colors
+  palette: null
+};
+
+// ── PHYSICAL SIZE HELPERS ──
+function physSize() {
+  if (S.size === 'A5') return { w:148, h:210 };
+  if (S.size === 'B5') return { w:176, h:250 };
+  return { w: S.customW, h: S.customH };
+}
+function physRatio() { const p = physSize(); return p.w / p.h; }
+
+// Display dims for 3D book (maintain aspect ratio, target height)
+function dispDims() {
+  const r = physRatio();
+  const h = 260;
+  return { w: Math.round(h * r), h };
+}
+
+// ── SIZE SYSTEM ──
+function setSize(sz) {
+  S.size = sz;
+  ['A5','B5','custom'].forEach(k =>
+    document.getElementById('size' + (k==='custom'?'Cust':k)).classList.toggle('active', k===sz));
+  document.getElementById('customInputs').style.display = sz === 'custom' ? 'flex' : 'none';
+  updateSizeInfo();
+  buildBook();
+}
+function updateSizeInfo() {
+  const p = physSize();
+  const r = (p.h / p.w).toFixed(3);
+  document.getElementById('sizeInfo').textContent = `${p.w} × ${p.h} mm · 比例 1:${r}`;
+}
+function updateCustomSize() {
+  S.customW = Math.max(50, parseInt(document.getElementById('custW').value) || 148);
+  S.customH = Math.max(70, parseInt(document.getElementById('custH').value) || 210);
+  SIZES.custom = { w: S.customW, h: S.customH };
+  updateSizeInfo();
+  buildBook();
+}
+
+// ── DRAG / ROTATE / ZOOM ──
+let drag = null;
+const stage = document.getElementById('canvasStage');
+
+stage.addEventListener('mousedown', e => {
+  if (S.mode !== 'edit') return;
+  e.preventDefault();
+  if (e.button === 2) drag = { type:'rotate', sx:e.clientX, sy:e.clientY, sRY:S.rotY, sRX:S.rotX };
+  else if (e.button === 0) drag = { type:'move', sx:e.clientX, sy:e.clientY, sOX:S.offX, sOY:S.offY };
+});
+window.addEventListener('mousemove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+  if (drag.type === 'rotate') {
+    S.rotY = drag.sRY + dx * 0.35;
+    S.rotX = Math.max(-50, Math.min(50, drag.sRX - dy * 0.25));
+  } else {
+    S.offX = drag.sOX + dx;
+    S.offY = drag.sOY + dy;
+  }
+  applyTransform();
+});
+window.addEventListener('mouseup', () => drag = null);
+stage.addEventListener('contextmenu', e => e.preventDefault());
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  S.zoom = Math.max(0.25, Math.min(3, S.zoom + (e.deltaY > 0 ? -0.08 : 0.08)));
+  applyTransform();
+}, { passive:false });
+
+function applyTransform() {
+  const wrap  = document.getElementById('bookWrap');
+  const scene = document.getElementById('bookScene');
+  const { w: W, h: H } = dispDims();
+  const isL = S.flip === 'left';
+
+  // ── Rotation axis at the spine seam ──────────────────────────
+  // Left-open : spine is at x=0  → origin 0,   H/2
+  // Right-open: spine is at x=W  → origin W,   H/2
+  // Depth axis (z) stays at 0 (the z=0 plane of the wrap div).
+  const spineX = isL ? 0 : W;
+  wrap.style.transformOrigin = `${spineX}px ${H/2}px 0px`;
+
+  // The rotY drag direction is the same for both flip modes.
+  // We do NOT flip sign: the user always drags right to see the spine side.
+  wrap.style.transform = `rotateX(${S.rotX}deg) rotateY(${S.rotY}deg)`;
+
+  // Compensate for the pivot offset so the book stays centred in the viewport.
+  // The visual centre of the book (midpoint of cover) is W/2 from the spine.
+  // At the current rotY, its projected X is approximately:
+  //   projX = spineX_in_scene + (W/2) * cos(rotY_rad)
+  // We want projX ≈ 0 (scene centre), so shift scene by –projX:
+  const rad = S.rotY * Math.PI / 180;
+  const centreShift = isL
+    ? -(W / 2) * Math.cos(rad)          // spine at left → shift left
+    :  (W / 2) * Math.cos(rad);         // spine at right → shift right
+
+  scene.style.transform =
+    `translate(${S.offX + centreShift}px, ${S.offY}px) scale(${S.zoom})`;
+}
+function resetTransform() {
+  S.rotY = -25; S.rotX = 5; S.zoom = 1; S.offX = 0; S.offY = 0;
+  applyTransform(); showToast('已重置視角');
+}
+setTimeout(() => { const h = document.getElementById('rotHint'); if(h) h.classList.add('fade'); }, 4000);
+
+// ── MODE ──
+function setMode(m) {
+  S.mode = m;
+  document.getElementById('modeEdit').classList.toggle('active', m === 'edit');
+  document.getElementById('modePreview').classList.toggle('active', m === 'preview');
+  const cs = document.getElementById('canvasStage');
+  const ps = document.getElementById('previewStage');
+  if (m === 'edit') {
+    cs.style.display = 'flex'; ps.classList.remove('active');
+  } else {
+    cs.style.display = 'none'; ps.classList.add('active');
+    renderPreview();
+  }
+}
+
+// ── BUILD 3D BOOK ──
+//
+// Correct CSS 3D box geometry (all faces form a sealed, gapless box):
+//
+//   Front cover : translateZ(+D/2)                              — front face at z=+D/2
+//   Back cover  : rotateY(180deg) translateZ(+D/2)             — back face at z=-D/2, flipped
+//
+//   Spine (left-open, x=0):
+//     position  : left=0, width=D
+//     origin    : 0% 50% 0  ← pivot at the seam with the cover
+//     transform : translateZ(-D/2) rotateY(-90deg)
+//       step 1 rotateY(-90deg): right edge (D,0,0) → (0,0,D); face spans z:0→D at x=0
+//       step 2 translateZ(-D/2): face spans z:−D/2→+D/2 at x=0  ← flush with front+back ✓
+//
+//   Spine (right-open, x=W):
+//     position  : left=W, width=D
+//     origin    : 0% 50% 0
+//     transform : translateZ(+D/2) rotateY(+90deg)
+//       step 1 rotateY(+90deg): right edge → (0,0,−D); face spans z:0→−D at x=W
+//       step 2 translateZ(+D/2): face spans z:+D/2→−D/2 at x=W ✓
+//
+//   Pages edge  : symmetric to spine (opposite side), same math
+//
+//   Top face (W×D):
+//     position  : top=0, height=D
+//     origin    : 50% 0% 0  ← pivot at top edge of book (y=0)
+//     transform : translateZ(-D/2) rotateX(+90deg)
+//       step 1 rotateX(+90deg): bottom edge (y=D)→(0,0,D); face spans z:0→D at y=0
+//       step 2 translateZ(-D/2): face spans z:−D/2→+D/2 ✓
+//
+//   Bottom face (W×D):
+//     position  : top=H, height=D
+//     origin    : 50% 0% 0  ← pivot at bottom edge of book (y=H)
+//     transform : translateZ(+D/2) rotateX(-90deg)
+//       step 1 rotateX(-90deg): bottom edge→(0,0,−D); face spans z:0→−D at y=H
+//       step 2 translateZ(+D/2): face spans z:+D/2→−D/2 ✓
+
+function buildBook() {
+  const wrap = document.getElementById('bookWrap');
+  wrap.innerHTML = '';
+  const { w: W, h: H } = dispDims();
+  const D = S.spineW;
+  const isL = S.flip === 'left';
+
+  wrap.style.width  = W + 'px';
+  wrap.style.height = H + 'px';
+  applyTransform();
+
+  const backSrc = (document.getElementById('backUseCover').checked && S.images.cover)
+    ? S.images.cover : S.images.back;
+
+  // ── Face factory ─────────────────────────────────────────────
+  function mkFace({ left=0, top=0, w=W, h=H, origin='50% 50% 0', tf='none', bg=null } = {}) {
+    const el = document.createElement('div');
+    el.className = 'book-face';
+    el.style.left   = left + 'px';
+    el.style.top    = top  + 'px';
+    el.style.width  = w    + 'px';
+    el.style.height = h    + 'px';
+    el.style.transformOrigin = origin;
+    el.style.transform = tf;
+    if (bg) el.style.background = bg;
+    return el;
+  }
+
+  function addContent(el, src, label, w, h) {
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src; img.draggable = false;
+      el.appendChild(img);
+      el.style.cursor = 'pointer'; el.title = '點擊編輯';
+      el.onclick = e => { e.stopPropagation(); openEdit(label, src, w, h); };
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'ph-icon';
+      ph.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg><span>${label}</span>`;
+      const areaMap = { '封面':'coverArea','書脊':'spineArea','封底':'backArea' };
+      const uid = areaMap[label];
+      if (uid) ph.onclick = () => document.getElementById(uid).querySelector('input').click();
+      el.appendChild(ph);
+    }
+  }
+
+  // ── FRONT COVER ───────────────────────────────────────────────
+  const front = mkFace({ tf:`translateZ(${D/2}px)`, bg:'#c8b89a' });
+  addContent(front, S.images.cover, '封面', W, H);
+  wrap.appendChild(front);
+
+  // ── BACK COVER ────────────────────────────────────────────────
+  // rotateY(180deg) flips normal; then translateZ(D/2) in the rotated space
+  // places it at world z = -D/2, i.e. flush with the back of the spine.
+  const back = mkFace({ tf:`rotateY(180deg) translateZ(${D/2}px)`, bg:'#d4c5a9' });
+  addContent(back, backSrc, '封底', W, H);
+  wrap.appendChild(back);
+
+  // ── SPINE + PAGES EDGE ────────────────────────────────────────
+  // Key: transform-origin at the seam edge (0% of face width).
+  // The face is positioned so its inner edge aligns exactly with the cover edge.
+  // rotate swings face perpendicular; translateZ re-centres it on z=0.
+
+  if (isL) {
+    // Left-open: spine on left (x = 0)
+    const spine = mkFace({
+      left:0, w:D,
+      origin:'0% 50% 0',
+      tf:`translateZ(${-D/2}px) rotateY(-90deg)`,
+      bg:'#a89070'
+    });
+    addContent(spine, S.images.spine, '書脊', D, H);
+    wrap.appendChild(spine);
+
+    // Pages edge on right (x = W)
+    const edge = mkFace({ left:W, w:D, origin:'0% 50% 0', tf:`translateZ(${D/2}px) rotateY(90deg)` });
+    edge.style.background = 'repeating-linear-gradient(to bottom,#f0ede8 0px,#f0ede8 2px,#ddd9d2 2px,#ddd9d2 3px)';
+    wrap.appendChild(edge);
+  } else {
+    // Right-open: spine on right (x = W)
+    const spine = mkFace({
+      left:W, w:D,
+      origin:'0% 50% 0',
+      tf:`translateZ(${D/2}px) rotateY(90deg)`,
+      bg:'#a89070'
+    });
+    addContent(spine, S.images.spine, '書脊', D, H);
+    wrap.appendChild(spine);
+
+    // Pages edge on left (x = 0)
+    const edge = mkFace({ left:0, w:D, origin:'0% 50% 0', tf:`translateZ(${-D/2}px) rotateY(-90deg)` });
+    edge.style.background = 'repeating-linear-gradient(to bottom,#f0ede8 0px,#f0ede8 2px,#ddd9d2 2px,#ddd9d2 3px)';
+    wrap.appendChild(edge);
+  }
+
+  // ── TOP FACE ──────────────────────────────────────────────────
+  // Pivot at top edge (y=0); rotateX(90deg) swings face to z:0→D; shift back D/2
+  const topF = mkFace({ top:0, h:D, origin:'50% 0% 0', tf:`translateZ(${-D/2}px) rotateX(90deg)` });
+  topF.style.background = 'linear-gradient(135deg,#d8d0c0,#b8b0a0)';
+  wrap.appendChild(topF);
+
+  // ── BOTTOM FACE ───────────────────────────────────────────────
+  // Pivot at bottom edge (y=H); rotateX(-90deg) swings face to z:0→-D; shift forward D/2
+  const botF = mkFace({ top:H, h:D, origin:'50% 0% 0', tf:`translateZ(${D/2}px) rotateX(-90deg)` });
+  botF.style.background = 'linear-gradient(135deg,#c0b8a8,#a8a098)';
+  wrap.appendChild(botF);
+
+  // ── SHADOW ────────────────────────────────────────────────────
+  const sh = document.createElement('div');
+  sh.style.cssText = 'position:absolute;bottom:-32px;left:5%;width:90%;height:32px;'
+    + 'background:radial-gradient(ellipse at 50% 0%,rgba(0,0,0,.25) 0%,transparent 70%);'
+    + 'filter:blur(8px);pointer-events:none';
+  wrap.appendChild(sh);
+}
+
+// ── IMAGE UPLOAD (cover/spine/back) ──
+function handleUpload(e, face) {
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    S.images[face] = ev.target.result;
+    updateArea(face, ev.target.result);
+    buildBook();
+    if (face === 'cover') autoExtractColors();
+  };
+  r.readAsDataURL(file);
+  e.target.value = '';
+}
+function updateArea(face, url) {
+  const ids = { cover:'coverArea', spine:'spineArea', back:'backArea' };
+  const area = document.getElementById(ids[face]); if (!area) return;
+  area.classList.add('has-image');
+  const ex = area.querySelector('img'); if (ex) ex.remove();
+  const img = document.createElement('img'); img.src = url;
+  area.insertBefore(img, area.querySelector('.ulbl'));
+  area.querySelector('.clr-btn').style.display = 'flex';
+}
+function clearImg(e, face) {
+  e.preventDefault(); e.stopPropagation();
+  S.images[face] = null;
+  const ids = { cover:'coverArea', spine:'spineArea', back:'backArea' };
+  const area = document.getElementById(ids[face]);
+  area.classList.remove('has-image');
+  const img = area.querySelector('img'); if (img) img.remove();
+  area.querySelector('.clr-btn').style.display = 'none';
+  buildBook();
+}
+
+// ── INNER PAGES ──
+async function handlePages(e) {
+  const files = Array.from(e.target.files); if (!files.length) return;
+  if (files.length === 1 && files[0].type === 'application/pdf') {
+    await loadPDF(files[0]);
+  } else {
+    const imgs = files.filter(f => f.type.startsWith('image/')).slice(0, 6 - S.pages.length);
+    if (!imgs.length) { showToast('請選擇圖片或 PDF'); return; }
+    const results = await Promise.all(imgs.map(f => new Promise(res => {
+      const r = new FileReader(); r.onload = ev => res(ev.target.result); r.readAsDataURL(f);
+    })));
+    S.pages = [...S.pages, ...results].slice(0, 6);
+    renderPageThumbs(); buildBook(); showToast(`已載入 ${results.length} 頁`);
+  }
+  e.target.value = '';
+}
+async function loadPDF(file) {
+  const prog = document.getElementById('pdfProg'); const bar = document.getElementById('pdfBar');
+  prog.classList.add('vis'); bar.value = 0;
+  try {
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const total = Math.min(pdf.numPages, 6); bar.max = total;
+    const pages = [];
+    for (let i = 1; i <= total; i++) {
+      const page = await pdf.getPage(i);
+      const vp = page.getViewport({ scale: 1.5 });
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      pages.push(c.toDataURL('image/jpeg', 0.85));
+      bar.value = i;
+    }
+    S.pages = pages; renderPageThumbs(); buildBook();
+    showToast(`PDF 已轉換 ${pages.length} 頁`);
+  } catch(err) { showToast('PDF 讀取失敗'); }
+  finally { prog.classList.remove('vis'); }
+}
+function renderPageThumbs() {
+  const c = document.getElementById('pagesThumbs'); c.innerHTML = '';
+  S.pages.forEach((url, i) => {
+    const d = document.createElement('div'); d.className = 'pg-thumb';
+    d.innerHTML = `<img src="${url}"><span class="pg-num">p.${i+1}</span>`;
+    const del = document.createElement('button'); del.className = 'pg-del'; del.textContent = '✕';
+    del.onclick = ev => { ev.stopPropagation(); S.pages.splice(i,1); renderPageThumbs(); buildBook(); };
+    d.appendChild(del);
+    d.onclick = ev => { if (ev.target === del) return; openEdit('page_'+i, url, 300, 420); };
+    c.appendChild(d);
+  });
+  document.getElementById('pagesCount').textContent = S.pages.length ? `${S.pages.length} / 6 頁` : '';
+}
+
+// ── CONTROLS ──
+function setFlip(dir) {
+  S.flip = dir;
+  document.getElementById('flipL').classList.toggle('active', dir==='left');
+  document.getElementById('flipR').classList.toggle('active', dir==='right');
+  buildBook();
+}
+const CM_TO_PX = 37.8; // 96dpi: 1cm = 37.8px
+function updateSpineCm(v) {
+  const cm = Math.max(0.3, Math.min(5, parseFloat(v) || 1.0));
+  S.spineW = Math.round(cm * CM_TO_PX);
+  S.spineCm = cm;
+  buildBook();
+}
+function updateSpine(v) { updateSpineCm(v / CM_TO_PX); } // legacy alias
+function updateBg(v) {
+  S.bg = v;
+  document.getElementById('canvasStage').style.background = v;
+  document.getElementById('previewStage').style.background = v;
+  document.getElementById('bgV').textContent = v;
+}
+
+// ── AUTO COLOR EXTRACTION ──
+function autoExtractColors() {
+  if (!S.images.cover) return;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    try {
+      const thief = new ColorThief();
+      const dom = thief.getColor(img);
+      const pal = thief.getPalette(img, 9);
+      S.palette = [dom, ...pal];
+      renderSwatches(document.getElementById('swatchBox'), S.palette);
+    } catch(e) {}
+  };
+  img.src = S.images.cover;
+}
+function toHex([r,g,b]) { return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); }
+function saturation([r,g,b]) { return Math.max(r,g,b)-Math.min(r,g,b); }
+function renderSwatches(container, palette) {
+  if (!palette || !palette.length) return;
+  container.innerHTML = '';
+  const primary = palette.slice(0, 3);
+  const accents = [...palette].sort((a,b)=>saturation(b)-saturation(a)).slice(0,3);
+  const neutrals = [...palette].sort((a,b)=>saturation(a)-saturation(b)).slice(0,3);
+  const mk = (title, colors) => {
+    const g = document.createElement('div'); g.className = 'color-grp';
+    g.innerHTML = `<div class="color-grp-title">${title}</div>`;
+    const row = document.createElement('div'); row.className = 'swatch-row';
+    colors.forEach(c => {
+      const hex = toHex(c); const s = document.createElement('div');
+      s.className = 'swatch'; s.style.background = hex; s.title = hex;
+      s.innerHTML = `<span class="hex-l">${hex}</span>`;
+      s.onclick = () => { navigator.clipboard.writeText(hex).catch(()=>{}); showToast('已複製 '+hex); };
+      row.appendChild(s);
+    });
+    g.appendChild(row); container.appendChild(g);
+  };
+  mk('主色', primary); mk('輔色', accents); mk('中性色', neutrals);
+}
+
+// ── PREVIEW MODE ──
+function renderPreview() {
+  const inner = document.getElementById('previewInner');
+  inner.innerHTML = '';
+  const ps = document.getElementById('previewStage');
+  ps.style.background = S.bg;
+
+  const phys = physSize();
+  const ratio = physRatio(); // w/h
+
+  // ── Book Info Bar ──
+  const infoBar = document.createElement('div');
+  infoBar.className = 'book-info-bar';
+  const fields = [
+    { id:'pvTitle', label:'📖 書名', ph:'輸入書名', key:'title' },
+    { id:'pvAuthor', label:'✍️ 作者', ph:'輸入作者', key:'author' },
+    { id:'pvDate', label:'📅 出版日期', ph:'YYYY-MM-DD', key:'pubDate' }
+  ];
+  fields.forEach(f => {
+    const div = document.createElement('div'); div.className = 'info-field';
+    div.innerHTML = `<label>${f.label}</label>`;
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.placeholder = f.ph; inp.value = S[f.key];
+    inp.oninput = e => { S[f.key] = e.target.value; };
+    div.appendChild(inp); infoBar.appendChild(div);
+  });
+  inner.appendChild(infoBar);
+
+  // ── Flat Book Display ──
+  const bookWrap = document.createElement('div');
+  bookWrap.className = 'flat-book-wrap';
+
+  // Scale to fit nicely
+  const targetH = Math.min(320, ps.clientHeight * 0.35 || 280);
+  const sH = targetH;
+  const sW = Math.round(sH * ratio);
+  const sD = S.spineW;
+
+  const flatBook = document.createElement('div');
+  flatBook.className = 'flat-book';
+
+  const isL = S.flip === 'left';
+  const backSrc = (document.getElementById('backUseCover').checked && S.images.cover)
+    ? S.images.cover : S.images.back;
+
+  // Build flat faces in order:
+  // Right-open (右翻): [封底] [書脊] [封面]
+  // Left-open (左翻/漫畫): [封面] [書脊] [封底]
+  const mkFlatFace = (src, w, h, bg, faceLabel) => {
+    const div = document.createElement('div');
+    div.className = 'flat-cover' + (src ? '' : ' empty');
+    div.style.cssText = `width:${w}px;height:${h}px;background:${bg};`;
+    if (src) { const img = document.createElement('img'); img.src = src; div.appendChild(img); }
+    else { div.textContent = faceLabel; }
+    return div;
+  };
+  const mkSpine = (src, w, h) => {
+    const div = document.createElement('div');
+    div.className = 'flat-spine' + (src ? '' : ' empty');
+    div.style.cssText = `width:${w}px;height:${h}px;background:#a89070;`;
+    if (src) { const img = document.createElement('img'); img.src = src; div.appendChild(img); }
+    else {
+      const line = document.createElement('div');
+      line.style.cssText = 'width:100%;height:100%;background:repeating-linear-gradient(to bottom,#a89070 0,#a89070 2px,#c0a880 2px,#c0a880 4px)';
+      div.appendChild(line);
+    }
+    return div;
+  };
+
+  if (!isL) {
+    // 右翻: 封底 | 書脊 | 封面
+    flatBook.appendChild(mkFlatFace(backSrc, sW, sH, '#d4c5a9', '封底'));
+    flatBook.appendChild(mkSpine(S.images.spine, sD, sH));
+    flatBook.appendChild(mkFlatFace(S.images.cover, sW, sH, '#c8b89a', '封面'));
+  } else {
+    // 左翻: 封面 | 書脊 | 封底
+    flatBook.appendChild(mkFlatFace(S.images.cover, sW, sH, '#c8b89a', '封面'));
+    flatBook.appendChild(mkSpine(S.images.spine, sD, sH));
+    flatBook.appendChild(mkFlatFace(backSrc, sW, sH, '#d4c5a9', '封底'));
+  }
+
+  bookWrap.appendChild(flatBook);
+  const dims = document.createElement('div');
+  dims.className = 'flat-dims';
+  const szLabel = S.size === 'A5' ? 'A5' : S.size === 'B5' ? 'B5' : '自訂';
+  dims.textContent = `${szLabel} · ${phys.w}×${phys.h} mm · 書脊 ${S.spineW}px`;
+  bookWrap.appendChild(dims);
+  inner.appendChild(bookWrap);
+
+  // ── Color Swatches (in preview) ──
+  if (S.palette && S.palette.length) {
+    const swWrap = document.createElement('div');
+    swWrap.className = 'preview-swatches';
+    const lbl = document.createElement('div');
+    lbl.className = 'pv-swatch-label'; lbl.textContent = '色票';
+    swWrap.appendChild(lbl);
+    const colors = S.palette.slice(0, 8);
+    colors.forEach(c => {
+      const hex = toHex(c);
+      const s = document.createElement('div');
+      s.className = 'pv-swatch'; s.style.background = hex; s.title = hex;
+      s.innerHTML = `<span class="hex">${hex}</span>`;
+      s.onclick = () => { navigator.clipboard.writeText(hex).catch(()=>{}); showToast('已複製 '+hex); };
+      swWrap.appendChild(s);
+    });
+    inner.appendChild(swWrap);
+  }
+
+  // ── Inner Pages (spread layout) ──
+  if (S.pages.length > 0) {
+    const sec = document.createElement('div'); sec.className = 'pages-section';
+    const title = document.createElement('div'); title.className = 'pages-sec-title';
+    title.textContent = `內頁 · ${S.pages.length} 頁`;
+    sec.appendChild(title);
+
+    const spreads = document.createElement('div'); spreads.className = 'spreads-wrap';
+
+    for (let i = 0; i < S.pages.length; i += 2) {
+      // Each spread: two pages side by side
+      // Page height based on book ratio
+      const pgH = 200; // base height
+      const pgW = Math.round(pgH * ratio); // maintain book aspect ratio
+
+      const spread = document.createElement('div');
+      spread.className = 'spread-row';
+      spread.style.height = pgH + 'px';
+
+      const lp = document.createElement('div');
+      lp.className = 'spread-page'; lp.style.flex = '0 0 ' + pgW + 'px';
+      const lImg = document.createElement('img'); lImg.src = S.pages[i]; lp.appendChild(lImg);
+      spread.appendChild(lp);
+
+      const gut = document.createElement('div'); gut.className = 'spread-gutter';
+      spread.appendChild(gut);
+
+      const rp = document.createElement('div');
+      rp.className = 'spread-page' + (S.pages[i+1] ? '' : ' empty');
+      rp.style.flex = '0 0 ' + pgW + 'px';
+      if (S.pages[i+1]) { const rImg = document.createElement('img'); rImg.src = S.pages[i+1]; rp.appendChild(rImg); }
+      spread.appendChild(rp);
+      spreads.appendChild(spread);
+
+      const lblRow = document.createElement('div'); lblRow.className = 'spread-lbls';
+      lblRow.innerHTML = `<span>第 ${i+1} 頁</span><span>${S.pages[i+1] ? '第 '+(i+2)+' 頁' : ''}</span>`;
+      spreads.appendChild(lblRow);
+    }
+    sec.appendChild(spreads); inner.appendChild(sec);
+  }
+}
+
+// ── FABRIC EDITOR ──
+let FC = null, editFace = null, editOrigURL = null;
+
+function openEdit(face, url, fw, fh) {
+  editFace = face; editOrigURL = url;
+  const isPage = face.startsWith('page_');
+  const titleMap = { '封面':'編輯封面', '書脊':'編輯書脊', '封底':'編輯封底' };
+  document.getElementById('modalTitle').textContent = isPage
+    ? `編輯第 ${parseInt(face.split('_')[1])+1} 頁` : (titleMap[face] || '編輯圖片');
+  document.getElementById('editModal').classList.add('open');
+
+  const el = document.getElementById('fabricCanvas');
+  const body = document.getElementById('modalBody');
+  const mW = Math.min(body.clientWidth||660, 660);
+  const mH = 440;
+  const sc = Math.min(mW/fw, mH/fh, 1);
+  const cW = Math.round(fw*sc), cH = Math.round(fh*sc);
+  el.width = cW; el.height = cH;
+  if (FC) { FC.dispose(); FC = null; }
+  FC = new fabric.Canvas('fabricCanvas', { width:cW, height:cH, backgroundColor:'#1a1a2a' });
+  fabric.Image.fromURL(url, img => {
+    img.scaleToWidth(cW*.95);
+    img.set({ left:cW/2, top:cH/2, originX:'center', originY:'center' });
+    FC.add(img); FC.setActiveObject(img); FC.renderAll();
+  }, { crossOrigin:'anonymous' });
+}
+function closeModal() {
+  document.getElementById('editModal').classList.remove('open');
+  if (FC) { FC.dispose(); FC = null; } editFace = null;
+}
+function resetFabric() {
+  if (!FC || !editOrigURL) return;
+  FC.clear(); FC.backgroundColor = '#1a1a2a';
+  const cW = FC.width, cH = FC.height;
+  fabric.Image.fromURL(editOrigURL, img => {
+    img.scaleToWidth(cW*.95);
+    img.set({ left:cW/2, top:cH/2, originX:'center', originY:'center' });
+    FC.add(img); FC.setActiveObject(img); FC.renderAll();
+  }, { crossOrigin:'anonymous' });
+}
+function applyFabric() {
+  if (!FC || !editFace) return;
+  FC.discardActiveObject(); FC.renderAll();
+  const url = FC.toDataURL({ format:'png', multiplier:2 });
+  if (editFace.startsWith('page_')) {
+    S.pages[parseInt(editFace.split('_')[1])] = url; renderPageThumbs();
+  } else {
+    const faceKey = { '封面':'cover', '書脊':'spine', '封底':'back' }[editFace] || editFace;
+    S.images[faceKey] = url; updateArea(faceKey, url);
+  }
+  buildBook(); closeModal(); showToast('已套用編輯');
+}
+
+// ── BOOKSHELF ──
+function saveToShelf() {
+  if (!S.images.cover && !S.images.spine && !S.pages.length) { showToast('請先上傳圖片'); return; }
+  const books = getShelf();
+  books.push({
+    id: Date.now().toString(), ts: new Date().toLocaleString('zh-TW'),
+    images:{...S.images}, pages:[...S.pages],
+    flip:S.flip, spineW:S.spineW, size:S.size, customW:S.customW, customH:S.customH, bg:S.bg,
+    title:S.title, author:S.author, pubDate:S.pubDate
+  });
+  if (books.length>30) books.shift();
+  try { localStorage.setItem('bks_v3', JSON.stringify(books)); renderShelf(); showToast('已儲存！'); }
+  catch(e) { showToast('儲存失敗（空間不足）'); }
+}
+function getShelf() { try { return JSON.parse(localStorage.getItem('bks_v3')||'[]'); } catch { return []; } }
+function loadFromShelf(id) {
+  const b = getShelf().find(x=>x.id===id); if (!b) return;
+  Object.assign(S, {
+    images:{...b.images}, pages:[...(b.pages||[])],
+    flip:b.flip||'left', spineW:b.spineW||40,
+    size:b.size||'A5', customW:b.customW||148, customH:b.customH||210,
+    bg:b.bg||'#e8e8f0', title:b.title||'', author:b.author||'', pubDate:b.pubDate||''
+  });
+  document.getElementById('spineInput').value = (S.spineW / CM_TO_PX).toFixed(1);
+  document.getElementById('bgPicker').value = S.bg;
+  document.getElementById('bgV').textContent = S.bg;
+  document.getElementById('canvasStage').style.background = S.bg;
+  document.getElementById('flipL').classList.toggle('active', S.flip==='left');
+  document.getElementById('flipR').classList.toggle('active', S.flip==='right');
+  setSize(S.size);
+  ['cover','spine','back'].forEach(f => {
+    const ids={cover:'coverArea',spine:'spineArea',back:'backArea'};
+    const a=document.getElementById(ids[f]);
+    const ex=a.querySelector('img'); if(ex) ex.remove();
+    a.querySelector('.clr-btn').style.display='none'; a.classList.remove('has-image');
+    if(S.images[f]) updateArea(f,S.images[f]);
+  });
+  renderPageThumbs(); buildBook();
+  if (S.images.cover) autoExtractColors();
+  showToast('已載入書本');
+}
+function deleteFromShelf(id) {
+  localStorage.setItem('bks_v3', JSON.stringify(getShelf().filter(b=>b.id!==id)));
+  renderShelf(); showToast('已刪除');
+}
+function renderShelf() {
+  const books = getShelf(); const grid = document.getElementById('shelfGrid');
+  grid.innerHTML = '';
+  if (!books.length) { grid.innerHTML='<div class="shelf-empty">尚無儲存書本</div>'; return; }
+  [...books].reverse().forEach(b => {
+    const item = document.createElement('div'); item.className='shelf-item'; item.title=b.ts;
+    if (b.images.cover) { const img=document.createElement('img'); img.src=b.images.cover; item.appendChild(img); }
+    else { item.style.background='#d4c5a9'; item.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:9px">無封面</div>'; }
+    item.onclick = () => loadFromShelf(b.id);
+    const del=document.createElement('button'); del.className='shelf-del'; del.textContent='✕';
+    del.onclick=e=>{e.stopPropagation();deleteFromShelf(b.id);}; item.appendChild(del);
+    grid.appendChild(item);
+  });
+}
+
+// ── TOAST ──
+let _tt=null;
+function showToast(msg) {
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  if(_tt) clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2400);
+}
+
+// ── INIT ──
+updateSizeInfo();
+buildBook();
+renderShelf();
+</script>
+</body>
+</html>
